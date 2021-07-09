@@ -1,17 +1,21 @@
 package registration
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"time"
 	"sync/atomic"
-	"github.com/nats-io/nuid"
-	"github.com/gorilla/mux"
+	"time"
+	"strconv"
+
 	"example.com/nats-microservices-opd/shared"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/mux"
+	"github.com/nats-io/nuid"
 )
 
 const (
@@ -29,62 +33,53 @@ var ops uint64
 func generateTokenNumber(start uint64) uint64 {
   if start > 0 {
 	ops = start
+	return ops
   }
   atomic.AddUint64(&ops, 1)
   return ops
 }
 
-// HandleRides processes requests to find available drivers in an area.
+// HandleTokenReset processes token generation requests for registered patients.
+func (s *Server) HandleTokenReset(w http.ResponseWriter, r *http.Request) {
+	resetID, _ := strconv.ParseUint(mux.Vars(r)["id"], 10, 64)
+	generateTokenNumber(resetID)
+	json.NewEncoder(w).Encode("Token reset successful")
+}
+
+// HandleToken processes token generation requests for registered patients.
 func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-	}
-
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
-	var request *shared.DriverAgentRequest
-	err = json.Unmarshal(body, &request)
-	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
-	// Tag the request with an ID for tracing in the logs.
-	request.RequestID = nuid.Next()
-	req, err := json.Marshal(request)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
+	token := generateTokenNumber(0)
+	patientID, _ := strconv.Atoi(mux.Vars(r)["id"])
+	fmt.Println("Token %d generated for user %d", token, patientID)
+	// Publish event to the NATS server
 	nc := s.NATS()
 
-	// Find a driver available to help with the request.
-	log.Printf("requestID:%s - Finding available driver for request: %s\n", request.RequestID, string(body))
-	msg, err := nc.Request("drivers.find", req, 5*time.Second)
-	if err != nil {
-		log.Printf("requestID:%s - Gave up finding available driver for request\n", request.RequestID)
-		http.Error(w, "Request timeout", http.StatusRequestTimeout)
-		return
-	}
-	log.Printf("requestID:%s - Response: %s\n", request.RequestID, string(msg.Data))
+	registration_event := shared.RegistrationEvent{patientID, token}
+	reg_event, err := json.Marshal(registration_event)
 
-	var resp *shared.DriverAgentResponse
-	err = json.Unmarshal(msg.Data, &resp)
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	if resp.Error != "" {
-		http.Error(w, resp.Error, http.StatusServiceUnavailable)
+		log.Fatal(err)
 		return
 	}
 
-	log.Printf("requestID:%s - Driver with ID %s is available to handle the request", request.RequestID, resp.ID)
-	fmt.Fprintf(w, string(msg.Data))
+	log.Printf("tokenID:%d - Publishing registration event with patientID %d\n", token, patientID)
+	// Publishing the message to NATS Server
+	nc.Publish("patient.register", reg_event)
+	json.NewEncoder(w).Encode(registration_event)
+
+
+}
+
+func dbConn()(db *sql.DB) {
+	dbDriver := "mysql"
+	dbUser := "root"
+	dbPass := "Root@1985"
+	dbName := "opd_data"
+	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+	if err != nil {
+		panic(err.Error())
+	}
+	return db
 }
 
 // HandleRegister processes patient registration requests.
@@ -103,14 +98,23 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Insert data to the database
+	db := dbConn()
+
+	insForm, err := db.Prepare("INSERT INTO patient_details(id, full_name, address, sex, phone, remarks) VALUES(?,?,?,?,?,?)")
+	if err != nil {
+		panic(err.Error())
+	}
+	insForm.Exec(registration.ID, registration.FullName, registration.Address, registration.Sex, registration.Phone, registration.Remarks)
+	//log.Println("INSERT: Name: " + name + " | City: " + city)
+    
+    defer db.Close()
+
 	// Tag the request with an ID for tracing in the logs.
 	registration.RequestID = nuid.Next()
 	fmt.Println(registration)
-	// req, err := json.Marshal(registration)
-	// if err != nil {
-	// 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	// 	return
-	// }
+
+	// Publish event to the NATS server
 	nc := s.NATS()
 
 	//var registration_event shared.RegistrationEvent
@@ -122,140 +126,72 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 		return
 	}
+
+	log.Printf("requestID:%s - Publishing registration event with patientID %d\n", registration.RequestID, registration.ID)
 	// Publishing the message to NATS Server
 	nc.Publish("patient.register", reg_event)
 
-
-
-	// // Find a driver available to help with the request.
-	// log.Printf("requestID:%s - Finding available driver for request: %s\n", request.RequestID, string(body))
-	// msg, err := nc.Request("drivers.find", req, 5*time.Second)
-	// if err != nil {
-	// 	log.Printf("requestID:%s - Gave up finding available driver for request\n", request.RequestID)
-	// 	http.Error(w, "Request timeout", http.StatusRequestTimeout)
-	// 	return
-	// }
-	// log.Printf("requestID:%s - Response: %s\n", request.RequestID, string(msg.Data))
-
-	// var resp *shared.DriverAgentResponse
-	// err = json.Unmarshal(msg.Data, &resp)
-	// if err != nil {
-	// 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	// 	return
-	// }
-	// if resp.Error != "" {
-	// 	http.Error(w, resp.Error, http.StatusServiceUnavailable)
-	// 	return
-	// }
-
-	// log.Printf("requestID:%s - Driver with ID %s is available to handle the request", request.RequestID, resp.ID)
-	// fmt.Fprintf(w, string(msg.Data))
+	json.NewEncoder(w).Encode(registration_event)
 }
 
-// HandleRides processes requests to find available drivers in an area.
+// HandleUpdate processes requests to update patient details.
 func (s *Server) HandleUpdate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-	}
-
+	patientID := mux.Vars(r)["id"]
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
-	var request *shared.DriverAgentRequest
+	var request *shared.RegistrationRequest
 	err = json.Unmarshal(body, &request)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
-	// Tag the request with an ID for tracing in the logs.
-	request.RequestID = nuid.Next()
-	req, err := json.Marshal(request)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	nc := s.NATS()
+	db := dbConn()
 
-	// Find a driver available to help with the request.
-	log.Printf("requestID:%s - Finding available driver for request: %s\n", request.RequestID, string(body))
-	msg, err := nc.Request("drivers.find", req, 5*time.Second)
+	insForm, err := db.Prepare("UPDATE patient_details SET full_name=?, address=?, sex=?, phone=?, remarks=? WHERE id=?")
 	if err != nil {
-		log.Printf("requestID:%s - Gave up finding available driver for request\n", request.RequestID)
-		http.Error(w, "Request timeout", http.StatusRequestTimeout)
-		return
+		panic(err.Error())
 	}
-	log.Printf("requestID:%s - Response: %s\n", request.RequestID, string(msg.Data))
-
-	var resp *shared.DriverAgentResponse
-	err = json.Unmarshal(msg.Data, &resp)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	if resp.Error != "" {
-		http.Error(w, resp.Error, http.StatusServiceUnavailable)
-		return
-	}
-
-	log.Printf("requestID:%s - Driver with ID %s is available to handle the request", request.RequestID, resp.ID)
-	fmt.Fprintf(w, string(msg.Data))
+	insForm.Exec(request.FullName, request.Address, request.Sex, request.Phone, request.Remarks, patientID)
+	//log.Println("UPDATE: Name: " + name + " | City: " + city)
+    
+    defer db.Close()
 }
 
-// HandleRides processes requests to find available drivers in an area.
+// HandleView processes requests to view patient data.
 func (s *Server) HandleView(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-	}
+	patientID := mux.Vars(r)["id"]
+	// Insert data to the database
+	db := dbConn()
 
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
+	selDB, err := db.Query("SELECT * FROM patient_details WHERE ID=?", patientID)
+    if err != nil {
+        panic(err.Error())
+    }
 
-	var request *shared.DriverAgentRequest
-	err = json.Unmarshal(body, &request)
-	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
+    registration := shared.RegistrationRequest{}
+    for selDB.Next() {
+        var id, phone int
+        var full_name, address, sex, remarks string
+        err = selDB.Scan(&id, &full_name, &address, &sex, &phone, &remarks)
+        if err != nil {
+            panic(err.Error())
+        }
+        registration.ID = id
+        registration.FullName = full_name
+        registration.Address = address
+		registration.Sex = sex
+		registration.Phone = phone
+		registration.Remarks = remarks
+    }
 
-	// Tag the request with an ID for tracing in the logs.
-	request.RequestID = nuid.Next()
-	req, err := json.Marshal(request)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	nc := s.NATS()
-
-	// Find a driver available to help with the request.
-	log.Printf("requestID:%s - Finding available driver for request: %s\n", request.RequestID, string(body))
-	msg, err := nc.Request("drivers.find", req, 5*time.Second)
-	if err != nil {
-		log.Printf("requestID:%s - Gave up finding available driver for request\n", request.RequestID)
-		http.Error(w, "Request timeout", http.StatusRequestTimeout)
-		return
-	}
-	log.Printf("requestID:%s - Response: %s\n", request.RequestID, string(msg.Data))
-
-	var resp *shared.DriverAgentResponse
-	err = json.Unmarshal(msg.Data, &resp)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	if resp.Error != "" {
-		http.Error(w, resp.Error, http.StatusServiceUnavailable)
-		return
-	}
-
-	log.Printf("requestID:%s - Driver with ID %s is available to handle the request", request.RequestID, resp.ID)
-	fmt.Fprintf(w, string(msg.Data))
+	fmt.Println(registration)
+	json.NewEncoder(w).Encode(registration)
+    defer db.Close()
 }
 
 func (s *Server) HandleHomeLink(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +222,11 @@ func (s *Server) ListenAndServe(addr string) error {
 
 	// Handle token requests
 	// GET /opd/patient/token
-	router.HandleFunc("/token", s.HandleToken).Methods("GET")
+	router.HandleFunc("/token/{id}", s.HandleToken).Methods("GET")
+
+	// Handle token reset requests
+	// GET /opd/patient/token/reset/{id}
+	router.HandleFunc("/token/reset/{id}", s.HandleTokenReset).Methods("GET")
 
 	//router.HandleFunc("/events/{id}", deleteEvent).Methods("DELETE")
 	//log.Fatal(http.ListenAndServe(":8080", router))
