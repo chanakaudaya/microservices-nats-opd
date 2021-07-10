@@ -69,7 +69,7 @@ func (s *Server) ListenTreatmentEvents() error {
 
 }
 
-// HandleRegister processes patient registration requests.
+// HandleTestRecord processes recording of tests related requests.
 func (s *Server) HandleTestRecord(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
