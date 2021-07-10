@@ -29,3 +29,35 @@ CREATE TABLE `inspection_details` (
 `tests` varchar(255),
 `notes` varchar(255)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+CREATE TABLE `medication_reports` (
+  `id` int(10) unsigned NOT NULL,
+`time` varchar(50),
+`dose` varchar(255),
+`notes` varchar(255)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+CREATE TABLE `test_reports` (
+  `id` int(10) unsigned NOT NULL,
+`time` varchar(50),
+`testname` varchar(100),
+`results` varchar(255),
+`status` varchar(50),
+`notes` varchar(255)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+CREATE TABLE `release_reports` (
+  `id` int(10) unsigned NOT NULL,
+`next_state` varchar(50),
+`post_medication` varchar(255),
+`notes` varchar(255)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+CREATE TABLE `discharge_details` (
+  `id` int(10) unsigned NOT NULL,
+`time` varchar(50),
+`state` varchar(50),
+`post_medication` varchar(255),
+`notes` varchar(255),
+`next_visit_date` varchar(255)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
