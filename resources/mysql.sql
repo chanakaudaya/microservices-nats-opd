@@ -8,15 +8,24 @@ CREATE TABLE `patient_details` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
-CREATE TABLE `test` (
-  `id` int(6) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(30) NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
-
-
 CREATE TABLE `patient_registrations` (
   `id` int(15) unsigned NOT NULL,
   `token` int(10) unsigned NOT NULL,
   PRIMARY KEY (`token`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+CREATE TABLE `inspection_reports` (
+  `id` int(10) unsigned NOT NULL,
+`medication` varchar(255),
+`tests` varchar(255),
+`notes` varchar(255)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+CREATE TABLE `inspection_details` (
+  `id` int(10) unsigned NOT NULL,
+  `time` varchar(50) NOT NULL,
+`observations` varchar(255),
+`medication` varchar(255),
+`tests` varchar(255),
+`notes` varchar(255)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;

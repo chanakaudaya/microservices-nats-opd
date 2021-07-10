@@ -109,7 +109,7 @@ type InspectionEvent struct {
 	Tests string `json:"tests,omitempty"`	
 
 	// Special notes 
-	Notes int `json:"notes,omitempty"`	
+	Notes string `json:"notes,omitempty"`	
 }
 
 // DriverAgentResponse is the response from the driver.
