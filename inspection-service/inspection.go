@@ -127,29 +127,34 @@ func (s *Server) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	// Insert data to the database
 	db := dbConn()
 
-	selDB, err := db.Query("SELECT * FROM patient_details WHERE ID=?", patientID)
+	selDB, err := db.Query("SELECT * FROM inspection_details WHERE ID=?", patientID)
     if err != nil {
         panic(err.Error())
     }
 
-    registration := shared.RegistrationRequest{}
+	type allInspections []shared.InspectionRequest
+	var inspections = allInspections{}
+
+    //registration := shared.RegistrationRequest{}
     for selDB.Next() {
-        var id, phone int
-        var full_name, address, sex, remarks string
-        err = selDB.Scan(&id, &full_name, &address, &sex, &phone, &remarks)
+		var newInspection shared.InspectionRequest
+        var id int
+        var time, observations, medication, tests, notes string
+        err = selDB.Scan(&id, &time, &observations, &medication, &tests, &notes)
         if err != nil {
             panic(err.Error())
         }
-        registration.ID = id
-        registration.FullName = full_name
-        registration.Address = address
-		registration.Sex = sex
-		registration.Phone = phone
-		registration.Remarks = remarks
+        newInspection.ID = id
+        newInspection.Time = time
+        newInspection.Observations = observations
+		newInspection.Medication = medication
+		newInspection.Tests = tests
+		newInspection.Notes = notes
+		inspections = append(inspections, newInspection)
     }
 
-	fmt.Println(registration)
-	json.NewEncoder(w).Encode(registration)
+	fmt.Println(inspections)
+	json.NewEncoder(w).Encode(inspections)
     defer db.Close()
 }
 
