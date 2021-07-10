@@ -73,6 +73,45 @@ type RegistrationEvent struct {
 	Token uint64 `json:"token"`
 }
 
+// RegistrationRequest is the request to register a patient.
+type InspectionRequest struct {
+	// National Identification Number of the patient.
+	ID int `json:"id"`
+
+	// Time the inspection was done.
+	Time string `json:"time,omitempty"`
+
+	// Observations from the inspection.
+	Observations string `json:"observations,omitempty"`
+
+	// Medication schedule 
+	Medication string `json:"medication,omitempty"`
+
+	// Tests to be carried out 
+	Tests string `json:"tests,omitempty"`	
+
+	// Special notes 
+	Notes int `json:"notes,omitempty"`	
+
+	// RequestID is the ID from the request.
+	RequestID string `json:"request_id,omitempty"`
+}
+
+// RegistrationRequest is the request to register a patient.
+type InspectionEvent struct {
+	// National Identification Number of the patient.
+	ID int `json:"id"`
+
+	// Medication schedule 
+	Medication string `json:"medication,omitempty"`
+
+	// Tests to be carried out 
+	Tests string `json:"tests,omitempty"`	
+
+	// Special notes 
+	Notes int `json:"notes,omitempty"`	
+}
+
 // DriverAgentResponse is the response from the driver.
 type DriverAgentResponse struct {
 	// ID is the identifier of the driver that will accept

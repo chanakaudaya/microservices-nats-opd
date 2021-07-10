@@ -13,3 +13,10 @@ CREATE TABLE `test` (
   `name` varchar(30) NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+
+CREATE TABLE `patient_registrations` (
+  `id` int(15) unsigned NOT NULL,
+  `token` int(10) unsigned NOT NULL,
+  PRIMARY KEY (`token`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
