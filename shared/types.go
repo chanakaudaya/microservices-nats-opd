@@ -91,7 +91,7 @@ type InspectionRequest struct {
 	Tests string `json:"tests,omitempty"`	
 
 	// Special notes 
-	Notes int `json:"notes,omitempty"`	
+	Notes string `json:"notes,omitempty"`	
 
 	// RequestID is the ID from the request.
 	RequestID string `json:"request_id,omitempty"`
