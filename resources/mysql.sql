@@ -59,5 +59,5 @@ CREATE TABLE `discharge_details` (
 `state` varchar(50),
 `post_medication` varchar(255),
 `notes` varchar(255),
-`next_visit_date` varchar(50)
+`next_visit` varchar(50)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;

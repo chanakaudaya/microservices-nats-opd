@@ -1,6 +1,7 @@
 package release
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,8 +10,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nats-io/nuid"
 	"example.com/nats-microservices-opd/shared"
+	"github.com/gorilla/mux"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nuid"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -22,11 +26,84 @@ type Server struct {
 	*shared.Component
 }
 
-// HandleRides processes requests to find available drivers in an area.
-func (s *Server) HandleRides(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+func dbConn()(db *sql.DB) {
+	dbDriver := "mysql"
+	dbUser := "root"
+	dbPass := "Root@1985"
+	dbName := "opd_data"
+	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+	if err != nil {
+		panic(err.Error())
 	}
+	return db
+}
+
+// Listen to release events and update the temporary table
+func (s *Server) ListenReleaseEvents() error {
+	nc := s.NATS()
+	nc.Subscribe("patient.release", func(msg *nats.Msg) {
+		var req *shared.ReleaseEvent
+		err := json.Unmarshal(msg.Data, &req)
+		if err != nil {
+			log.Printf("Error: %v\n", err)
+		}
+		
+		log.Printf("New Patient Release Event received for PatientID %d\n",
+			req.ID)
+
+			// Insert data to the database
+		db := dbConn()
+
+		insForm, err := db.Prepare("INSERT INTO release_reports(id, next_state, post_medication, notes) VALUES(?,?,?,?)")
+		if err != nil {
+			panic(err.Error())
+		}
+		insForm.Exec(req.ID, req.NextState, req.PostMedication, req.Notes)
+		//log.Println("INSERT: Name: " + name + " | City: " + city)
+		
+		defer db.Close()
+
+	})
+
+	return nil
+
+}
+
+// HandlePendingView processes requests to view pending releases.
+func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
+	// Retrieve pending inspections from the database
+	db := dbConn()
+
+	selDB, err := db.Query("SELECT * FROM release_reports")
+    if err != nil {
+        panic(err.Error())
+    }
+
+	type allReleases []shared.ReleaseEvent
+	var releases = allReleases{}
+
+    for selDB.Next() {
+		var newRelease shared.ReleaseEvent
+        var id int
+        var next_state, post_medication, notes string
+        err = selDB.Scan(&id, &next_state, &post_medication, &notes)
+        if err != nil {
+            panic(err.Error())
+        }
+        newRelease.ID = id
+        newRelease.NextState = next_state
+		newRelease.PostMedication = post_medication
+		newRelease.Notes = notes
+		releases = append(releases, newRelease)
+    }
+
+	fmt.Println(releases)
+	json.NewEncoder(w).Encode(releases)
+    defer db.Close()
+}
+
+// HandleDischargeRecord processes patient discharge requests.
+func (s *Server) HandleDischargeRecord(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -34,64 +111,80 @@ func (s *Server) HandleRides(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var request *shared.DriverAgentRequest
-	err = json.Unmarshal(body, &request)
+	var discharge *shared.DischargeRequest
+	err = json.Unmarshal(body, &discharge)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
-	// Tag the request with an ID for tracing in the logs.
-	request.RequestID = nuid.Next()
-	req, err := json.Marshal(request)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	nc := s.NATS()
+	// Insert data to the database
+	db := dbConn()
 
-	// Find a driver available to help with the request.
-	log.Printf("requestID:%s - Finding available driver for request: %s\n", request.RequestID, string(body))
-	msg, err := nc.Request("drivers.find", req, 5*time.Second)
+	insForm, err := db.Prepare("INSERT INTO discharge_details(id, time, state, post_medication, notes, next_visit) VALUES(?,?,?,?,?,?)")
 	if err != nil {
-		log.Printf("requestID:%s - Gave up finding available driver for request\n", request.RequestID)
-		http.Error(w, "Request timeout", http.StatusRequestTimeout)
-		return
+		panic(err.Error())
 	}
-	log.Printf("requestID:%s - Response: %s\n", request.RequestID, string(msg.Data))
+	insForm.Exec(discharge.ID, discharge.Time, discharge.State, discharge.PostMedication, discharge.Notes, discharge.NextVisit)
+	//log.Println("INSERT: Name: " + name + " | City: " + city)
 
-	var resp *shared.DriverAgentResponse
-	err = json.Unmarshal(msg.Data, &resp)
+	// Remove the entry from pending release table if it exists
+	removeData, err := db.Prepare("DELETE FROM release_reports WHERE id=?")
 	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+		panic(err.Error())
 	}
-	if resp.Error != "" {
-		http.Error(w, resp.Error, http.StatusServiceUnavailable)
-		return
+	removeData.Exec(discharge.ID)
+    
+    defer db.Close()
+
+	// Send admission  request if required
+	if discharge.State == "admission" {
+		discharge.RequestID = nuid.Next()
+		// Publish event to the NATS server
+		nc := s.NATS()
+
+		//var registration_event shared.RegistrationEvent
+		admission_event := shared.AdmissionEvent{discharge.ID, discharge.time, discharge.Notes}
+		reg_event, err := json.Marshal(admission_event)
+
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+
+		log.Printf("requestID:%s - Publishing inspection event with patientID %d\n", discharge.RequestID, discharge.ID)
+		// Publishing the message to NATS Server
+		nc.Publish("patient.admission", reg_event)
 	}
 
-	log.Printf("requestID:%s - Driver with ID %s is available to handle the request", request.RequestID, resp.ID)
-	fmt.Fprintf(w, string(msg.Data))
+	json.NewEncoder(w).Encode("Patient discharge recorded successfully")
+}
+
+func (s *Server) HandleHomeLink(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, fmt.Sprintf("Release Service v%s\n", Version))
 }
 
 // ListenAndServe takes the network address and port that
 // the HTTP server should bind to and starts it.
 func (s *Server) ListenAndServe(addr string) error {
-	mux := http.NewServeMux()
 
-	// GET /
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// See: https://golang.org/pkg/net/http/#ServeMux.Handle
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		fmt.Fprintf(w, fmt.Sprintf("NATS Rider API Server v%s\n", Version))
-	})
+	// Start listening to patient registration events
+	s.ListenReleaseEvents()
 
-	// POST /rides
-	mux.HandleFunc("/rides", s.HandleRides)
+	r := mux.NewRouter()
+	router := r.PathPrefix("/opd/release/").Subrouter()
+
+	// Handle base path requests
+	// GET /opd/inspection
+	router.HandleFunc("/", s.HandleHomeLink)
+	
+	// View pending patient release requests
+	// POST /opd/release/pending
+	router.HandleFunc("/pending", s.HandlePendingView).Methods("GET")
+
+	// Handle discharge requests
+	// GET /opd/treatment/tests/{id}
+	router.HandleFunc("/discharge", s.HandleDischargeRecord).Methods("POST")
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -99,11 +192,12 @@ func (s *Server) ListenAndServe(addr string) error {
 	}
 	srv := &http.Server{
 		Addr:           addr,
-		Handler:        mux,
+		Handler:        router,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
+
 	go srv.Serve(l)
 
 	return nil

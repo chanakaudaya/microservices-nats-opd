@@ -188,6 +188,9 @@ type ReleaseEvent struct {
 
 	// Special notes 
 	Notes string `json:"notes,omitempty"`	
+
+	// RequestID is the ID from the request.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // RegistrationRequest is the request to register a patient.

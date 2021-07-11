@@ -102,6 +102,44 @@ func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
     defer db.Close()
 }
 
+// HandleRelease processes requests to initiate a patient release.
+func (s *Server) HandleRelease(w http.ResponseWriter, r *http.Request) {
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	var release *shared.ReleaseEvent
+	err = json.Unmarshal(body, &release)
+	if err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	// Tag the request with an ID for tracing in the logs.
+	release.RequestID = nuid.Next()
+	fmt.Println(release)
+
+	// Publish event to the NATS server
+	nc := s.NATS()
+	
+	release_event := shared.ReleaseEvent{release.ID, release.NextState, release.PostMedication, release.Notes}
+	rel_event, err := json.Marshal(release_event)
+
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	log.Printf("requestID:%s - Publishing inspection event with patientID %d\n", release.RequestID, release.ID)
+	// Publishing the message to NATS Server
+	nc.Publish("patient.release", rel_event)
+
+	json.NewEncoder(w).Encode("Release event published")
+}
+
 // HandleTestRecord processes recording of tests related requests.
 func (s *Server) HandleTestRecord(w http.ResponseWriter, r *http.Request) {
 
@@ -309,6 +347,10 @@ func (s *Server) ListenAndServe(addr string) error {
 	// Handle test result update requests
 	// GET /opd/treatment/tests/{id}
 	router.HandleFunc("/tests/{id}", s.HandleTestRecord).Methods("POST")
+
+	// Handle patient release initialization requests
+	// GET /opd/treatment/release
+	router.HandleFunc("/release", s.HandleRelease).Methods("POST")
 
 	// Handle test result view requests
 	// GET /opd/treatment/tests/{id}
