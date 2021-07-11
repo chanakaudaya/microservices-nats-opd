@@ -1,7 +1,6 @@
 package treatment
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,17 +26,17 @@ type Server struct {
 }
 
 
-func dbConn()(db *sql.DB) {
-	dbDriver := "mysql"
-	dbUser := "root"
-	dbPass := "Root@1985"
-	dbName := "opd_data"
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
-	if err != nil {
-		panic(err.Error())
-	}
-	return db
-}
+// func dbConn()(db *sql.DB) {
+// 	dbDriver := "mysql"
+// 	dbUser := "root"
+// 	dbPass := "Root@1985"
+// 	dbName := "opd_data"
+// 	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
+// 	return db
+// }
 
 func (s *Server) ListenTreatmentEvents() error {
 	nc := s.NATS()
@@ -52,7 +51,7 @@ func (s *Server) ListenTreatmentEvents() error {
 			req.ID)
 
 			// Insert data to the database
-		db := dbConn()
+		db := s.DB()
 
 		insForm, err := db.Prepare("INSERT INTO inspection_reports(id, medication, tests, notes) VALUES(?,?,?,?)")
 		if err != nil {
@@ -61,7 +60,7 @@ func (s *Server) ListenTreatmentEvents() error {
 		insForm.Exec(req.ID, req.Medication, req.Tests, req.Notes)
 		//log.Println("INSERT: Name: " + name + " | City: " + city)
 		
-		defer db.Close()
+		//defer db.Close()
 
 	})
 
@@ -72,7 +71,7 @@ func (s *Server) ListenTreatmentEvents() error {
 // HandlePendingView processes requests to view pending treatments.
 func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
 	// Retrieve pending inspections from the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM inspection_reports")
     if err != nil {
@@ -99,7 +98,7 @@ func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(treatments)
 	json.NewEncoder(w).Encode(treatments)
-    defer db.Close()
+    //defer db.Close()
 }
 
 // HandleRelease processes requests to initiate a patient release.
@@ -125,7 +124,8 @@ func (s *Server) HandleRelease(w http.ResponseWriter, r *http.Request) {
 	// Publish event to the NATS server
 	nc := s.NATS()
 	
-	release_event := shared.ReleaseEvent{release.ID, release.NextState, release.PostMedication, release.Notes}
+	release.RequestID = nuid.Next()
+	release_event := shared.ReleaseEvent{release.ID, release.NextState, release.PostMedication, release.Notes, release.RequestID}
 	rel_event, err := json.Marshal(release_event)
 
 	if err != nil {
@@ -157,7 +157,7 @@ func (s *Server) HandleTestRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	insForm, err := db.Prepare("INSERT INTO test_reports(id, time, test_name, results, status, notes) VALUES(?,?,?,?,?,?)")
 	if err != nil {
@@ -166,7 +166,7 @@ func (s *Server) HandleTestRecord(w http.ResponseWriter, r *http.Request) {
 	insForm.Exec(test.ID, test.Time, test.TestName, test.Results, test.Status, test.Notes)
 	//log.Println("INSERT: Name: " + name + " | City: " + city)
     
-    defer db.Close()
+    //defer db.Close()
 
 	// // Tag the request with an ID for tracing in the logs.
 	// inspection.RequestID = nuid.Next()
@@ -209,7 +209,7 @@ func (s *Server) HandleMedicationRecord(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	insForm, err := db.Prepare("INSERT INTO medication_reports(id, time, dose, notes) VALUES(?,?,?,?)")
 	if err != nil {
@@ -225,7 +225,7 @@ func (s *Server) HandleMedicationRecord(w http.ResponseWriter, r *http.Request) 
 	}
 	removeData.Exec(medication.ID)
     
-    defer db.Close()
+    //defer db.Close()
 
 	// // Tag the request with an ID for tracing in the logs.
 	// medication.RequestID = nuid.Next()
@@ -254,7 +254,7 @@ func (s *Server) HandleMedicationRecord(w http.ResponseWriter, r *http.Request) 
 func (s *Server) HandleTestView(w http.ResponseWriter, r *http.Request) {
 	patientID := mux.Vars(r)["id"]
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM test_reports WHERE ID=?", patientID)
     if err != nil {
@@ -284,14 +284,14 @@ func (s *Server) HandleTestView(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(reports)
 	json.NewEncoder(w).Encode(reports)
-    defer db.Close()
+    //defer db.Close()
 }
 
 // HandleView processes requests to view patient data.
 func (s *Server) HandleHistoryView(w http.ResponseWriter, r *http.Request) {
 	patientID := mux.Vars(r)["id"]
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM medication_reports WHERE ID=?", patientID)
     if err != nil {
@@ -319,7 +319,7 @@ func (s *Server) HandleHistoryView(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(medications)
 	json.NewEncoder(w).Encode(medications)
-    defer db.Close()
+    //defer db.Close()
 }
 
 func (s *Server) HandleHomeLink(w http.ResponseWriter, r *http.Request) {

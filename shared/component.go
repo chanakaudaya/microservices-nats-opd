@@ -1,12 +1,10 @@
 package shared
 
 import (
-	"encoding/json"
-	"expvar"
 	"fmt"
 	"log"
-	"runtime"
 	"sync"
+	"database/sql"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nuid"
@@ -24,6 +22,9 @@ type Component struct {
 	// nc is the connection to NATS.
 	nc *nats.Conn
 
+	// db is the connection to DB.
+	db *sql.DB
+
 	// kind is the type of component.
 	kind string
 }
@@ -35,6 +36,25 @@ func NewComponent(kind string) *Component {
 		id:   id,
 		kind: kind,
 	}
+}
+
+// SetupConnectionToDB creates a connection to the database
+func (c *Component) SetupConnectionToDB(dbDriver string, connectionString string) error {
+	c.cmu.Lock()
+	defer c.cmu.Unlock()
+	db, err := sql.Open(dbDriver, connectionString)
+	if err != nil {
+		panic(err.Error())
+	}
+	c.db = db
+	return err
+}
+
+// Component returns the current Database connection.
+func (c *Component) DB() *sql.DB {
+	c.cmu.Lock()
+	defer c.cmu.Unlock()
+	return c.db
 }
 
 // SetupConnectionToNATS connects to NATS and registers the event
@@ -69,44 +89,6 @@ func (c *Component) SetupConnectionToNATS(servers string, options ...nats.Option
 		panic("Connection to NATS is closed!")
 	})
 
-	// Register component so that it is available for discovery requests.
-	_, err = c.nc.Subscribe("_NATS_RIDER.discovery", func(m *nats.Msg) {
-		// Reply back directly with own name if requested.
-		if m.Reply != "" {
-			nc.Publish(m.Reply, []byte(c.ID()))
-		} else {
-			log.Println("[Discovery] No Reply inbox, skipping...")
-		}
-	})
-
-	// Register component so that it is available for direct status requests.
-	// e.g. _NATS_RIDER.api-server.:id.status
-	statusSubject := fmt.Sprintf("_NATS_RIDER.%s.status", c.id)
-	_, err = c.nc.Subscribe(statusSubject, func(m *nats.Msg) {
-		if m.Reply != "" {
-			log.Println("[Status] Replying with status...")
-			statsz := struct {
-				Kind string           `json:"kind"`
-				ID   string           `json:"id"`
-				Cmd  []string         `json:"cmdline"`
-				Mem  runtime.MemStats `json:"memstats"`
-			}{
-				Kind: c.kind,
-				ID:   c.id,
-				Cmd:  expvar.Get("cmdline").(expvar.Func)().([]string),
-				Mem:  expvar.Get("memstats").(expvar.Func)().(runtime.MemStats),
-			}
-			result, err := json.Marshal(statsz)
-			if err != nil {
-				log.Printf("Error: %s\n", err)
-				return
-			}
-			nc.Publish(m.Reply, result)
-		} else {
-			log.Println("[Status] No Reply inbox, skipping...")
-		}
-	})
-
 	return err
 }
 
@@ -134,5 +116,6 @@ func (c *Component) Name() string {
 // Shutdown makes the component go away.
 func (c *Component) Shutdown() error {
 	c.NATS().Close()
+	defer c.DB().Close()
 	return nil
 }

@@ -18,6 +18,9 @@ func main() {
 		showVersion bool
 		serverListen string
 		natsServers string
+		dbUser string
+		dbPass string
+		dbName string
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: treatment-service [options...]\n\n")
@@ -30,6 +33,9 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.StringVar(&serverListen, "listen", "0.0.0.0:9092", "Network host:port to listen on")
 	flag.StringVar(&natsServers, "nats", nats.DefaultURL, "List of NATS Servers to connect")
+	flag.StringVar(&dbUser, "dbUser", "", "Database username")
+	flag.StringVar(&dbPass, "dbPassword", "", "Database password")
+	flag.StringVar(&dbName, "dbName", "", "Database name")
 	flag.Parse()
 
 	switch {
@@ -50,6 +56,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Connect to Database.
+	err = comp.SetupConnectionToDB("mysql", dbUser+":"+dbPass+"@/"+dbName)
+	if err != nil {
+		log.Fatal(err)
+	}	
+
 	s := treatment.Server{
 		Component: comp,
 	}

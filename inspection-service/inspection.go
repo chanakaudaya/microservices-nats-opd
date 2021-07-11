@@ -1,7 +1,6 @@
 package inspection
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,17 +26,17 @@ type Server struct {
 }
 
 
-func dbConn()(db *sql.DB) {
-	dbDriver := "mysql"
-	dbUser := "root"
-	dbPass := "Root@1985"
-	dbName := "opd_data"
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
-	if err != nil {
-		panic(err.Error())
-	}
-	return db
-}
+// func dbConn()(db *sql.DB) {
+// 	dbDriver := "mysql"
+// 	dbUser := "root"
+// 	dbPass := "Root@1985"
+// 	dbName := "opd_data"
+// 	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
+// 	return db
+// }
 
 func (s *Server) ListenRegisterEvents() error {
 	nc := s.NATS()
@@ -52,7 +51,7 @@ func (s *Server) ListenRegisterEvents() error {
 			req.ID, req.Token)
 
 			// Insert data to the database
-		db := dbConn()
+		db := s.DB()
 
 		insForm, err := db.Prepare("INSERT INTO patient_registrations(id, token) VALUES(?,?)")
 		if err != nil {
@@ -61,7 +60,7 @@ func (s *Server) ListenRegisterEvents() error {
 		insForm.Exec(req.ID, req.Token)
 		//log.Println("INSERT: Name: " + name + " | City: " + city)
 		
-		defer db.Close()
+		//defer db.Close()
 
 	})
 
@@ -72,7 +71,7 @@ func (s *Server) ListenRegisterEvents() error {
 // HandlePending processes requests to view pending inspections.
 func (s *Server) HandlePending(w http.ResponseWriter, r *http.Request) {
 	// Retrieve pending inspections from the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM patient_registrations")
     if err != nil {
@@ -97,7 +96,7 @@ func (s *Server) HandlePending(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(registrations)
 	json.NewEncoder(w).Encode(registrations)
-    defer db.Close()
+    //defer db.Close()
 }
 
 
@@ -118,7 +117,7 @@ func (s *Server) HandleRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	insForm, err := db.Prepare("INSERT INTO inspection_details(id, time, observations, medication, tests, notes) VALUES(?,?,?,?,?,?)")
 	if err != nil {
@@ -134,7 +133,7 @@ func (s *Server) HandleRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	removeData.Exec(inspection.ID)
     
-    defer db.Close()
+    //defer db.Close()
 
 	// Tag the request with an ID for tracing in the logs.
 	inspection.RequestID = nuid.Next()
@@ -163,7 +162,7 @@ func (s *Server) HandleRecord(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleHistory(w http.ResponseWriter, r *http.Request) {
 	patientID := mux.Vars(r)["id"]
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM inspection_details WHERE ID=?", patientID)
     if err != nil {
@@ -193,7 +192,7 @@ func (s *Server) HandleHistory(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(inspections)
 	json.NewEncoder(w).Encode(inspections)
-    defer db.Close()
+    //defer db.Close()
 }
 
 func (s *Server) HandleHomeLink(w http.ResponseWriter, r *http.Request) {

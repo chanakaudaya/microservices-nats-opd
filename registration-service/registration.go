@@ -1,7 +1,6 @@
 package registration
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -39,7 +38,7 @@ func generateTokenNumber(start uint64) uint64 {
   return ops
 }
 
-// HandleTokenReset processes token generation requests for registered patients.
+// HandleTokenReset processes token reset requests.
 func (s *Server) HandleTokenReset(w http.ResponseWriter, r *http.Request) {
 	resetID, _ := strconv.ParseUint(mux.Vars(r)["id"], 10, 64)
 	generateTokenNumber(resetID)
@@ -70,17 +69,18 @@ func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func dbConn()(db *sql.DB) {
-	dbDriver := "mysql"
-	dbUser := "root"
-	dbPass := "Root@1985"
-	dbName := "opd_data"
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
-	if err != nil {
-		panic(err.Error())
-	}
-	return db
-}
+
+// func (s *Server) DBConn()(db *sql.DB) {
+// 	dbDriver := "mysql"
+// 	dbUser := "root"
+// 	dbPass := "Root@1985"
+// 	dbName := "opd_data"
+// 	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
+// 	return db
+// }
 
 // HandleRegister processes patient registration requests.
 func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +99,7 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	insForm, err := db.Prepare("INSERT INTO patient_details(id, full_name, address, sex, phone, remarks) VALUES(?,?,?,?,?,?)")
 	if err != nil {
@@ -108,7 +108,7 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	insForm.Exec(registration.ID, registration.FullName, registration.Address, registration.Sex, registration.Phone, registration.Remarks)
 	//log.Println("INSERT: Name: " + name + " | City: " + city)
     
-    defer db.Close()
+    //defer db.Close()
 
 	// Tag the request with an ID for tracing in the logs.
 	registration.RequestID = nuid.Next()
@@ -136,7 +136,7 @@ func (s *Server) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdate processes requests to update patient details.
 func (s *Server) HandleUpdate(w http.ResponseWriter, r *http.Request) {
-	patientID := mux.Vars(r)["id"]
+	//patientID := mux.Vars(r)["id"]
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -150,23 +150,24 @@ func (s *Server) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := dbConn()
+	db := s.DB()
 
 	insForm, err := db.Prepare("UPDATE patient_details SET full_name=?, address=?, sex=?, phone=?, remarks=? WHERE id=?")
 	if err != nil {
 		panic(err.Error())
 	}
-	insForm.Exec(request.FullName, request.Address, request.Sex, request.Phone, request.Remarks, patientID)
+	insForm.Exec(request.FullName, request.Address, request.Sex, request.Phone, request.Remarks, request.ID)
 	//log.Println("UPDATE: Name: " + name + " | City: " + city)
     
-    defer db.Close()
+    //defer db.Close()
+	json.NewEncoder(w).Encode("Record for Patient updated sucessfully")
 }
 
 // HandleView processes requests to view patient data.
 func (s *Server) HandleView(w http.ResponseWriter, r *http.Request) {
 	patientID := mux.Vars(r)["id"]
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM patient_details WHERE ID=?", patientID)
     if err != nil {
@@ -191,7 +192,7 @@ func (s *Server) HandleView(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(registration)
 	json.NewEncoder(w).Encode(registration)
-    defer db.Close()
+    //defer db.Close()
 }
 
 func (s *Server) HandleHomeLink(w http.ResponseWriter, r *http.Request) {
@@ -213,8 +214,8 @@ func (s *Server) ListenAndServe(addr string) error {
 	router.HandleFunc("/register", s.HandleRegister).Methods("POST")
 
 	// Handle update requests
-	// PUT /opd/patient/update/{id}
-	router.HandleFunc("/update/{id}", s.HandleUpdate).Methods("PUT")
+	// PUT /opd/patient/update
+	router.HandleFunc("/update", s.HandleUpdate).Methods("PUT")
 
 	// Handle view requests
 	// GET /opd/patient/view/{id}

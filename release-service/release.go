@@ -1,7 +1,6 @@
 package release
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -26,17 +25,17 @@ type Server struct {
 	*shared.Component
 }
 
-func dbConn()(db *sql.DB) {
-	dbDriver := "mysql"
-	dbUser := "root"
-	dbPass := "Root@1985"
-	dbName := "opd_data"
-	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
-	if err != nil {
-		panic(err.Error())
-	}
-	return db
-}
+// func dbConn()(db *sql.DB) {
+// 	dbDriver := "mysql"
+// 	dbUser := "root"
+// 	dbPass := "Root@1985"
+// 	dbName := "opd_data"
+// 	db, err := sql.Open(dbDriver, dbUser+":"+dbPass+"@/"+dbName)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
+// 	return db
+// }
 
 // Listen to release events and update the temporary table
 func (s *Server) ListenReleaseEvents() error {
@@ -52,7 +51,7 @@ func (s *Server) ListenReleaseEvents() error {
 			req.ID)
 
 			// Insert data to the database
-		db := dbConn()
+		db := s.DB()
 
 		insForm, err := db.Prepare("INSERT INTO release_reports(id, next_state, post_medication, notes) VALUES(?,?,?,?)")
 		if err != nil {
@@ -61,7 +60,7 @@ func (s *Server) ListenReleaseEvents() error {
 		insForm.Exec(req.ID, req.NextState, req.PostMedication, req.Notes)
 		//log.Println("INSERT: Name: " + name + " | City: " + city)
 		
-		defer db.Close()
+		//defer db.Close()
 
 	})
 
@@ -72,7 +71,7 @@ func (s *Server) ListenReleaseEvents() error {
 // HandlePendingView processes requests to view pending releases.
 func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
 	// Retrieve pending inspections from the database
-	db := dbConn()
+	db := s.DB()
 
 	selDB, err := db.Query("SELECT * FROM release_reports")
     if err != nil {
@@ -99,7 +98,7 @@ func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(releases)
 	json.NewEncoder(w).Encode(releases)
-    defer db.Close()
+    //defer db.Close()
 }
 
 // HandleDischargeRecord processes patient discharge requests.
@@ -119,7 +118,7 @@ func (s *Server) HandleDischargeRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert data to the database
-	db := dbConn()
+	db := s.DB()
 
 	insForm, err := db.Prepare("INSERT INTO discharge_details(id, time, state, post_medication, notes, next_visit) VALUES(?,?,?,?,?,?)")
 	if err != nil {
@@ -135,7 +134,7 @@ func (s *Server) HandleDischargeRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	removeData.Exec(discharge.ID)
     
-    defer db.Close()
+    //defer db.Close()
 
 	// Send admission  request if required
 	if discharge.State == "admission" {
@@ -144,7 +143,7 @@ func (s *Server) HandleDischargeRecord(w http.ResponseWriter, r *http.Request) {
 		nc := s.NATS()
 
 		//var registration_event shared.RegistrationEvent
-		admission_event := shared.AdmissionEvent{discharge.ID, discharge.time, discharge.Notes}
+		admission_event := shared.AdmissionEvent{discharge.ID, discharge.Time, discharge.Notes}
 		reg_event, err := json.Marshal(admission_event)
 
 		if err != nil {

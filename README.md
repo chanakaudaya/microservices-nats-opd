@@ -1,25 +1,56 @@
 
-### Starting the API Server
-`go run code/api-server/cmd/api-server/main.go -nats "nats://127.0.0.1:4222"`
-Starting NATS Rider API Server version 0.1.0
-Listening for HTTP requests on 0.0.0.0:9090
+### Starting the Registration Service
+`cd registration-service`
+`go run cmd/main.go -dbName opd_data -dbUser root -dbPassword Root@1985`
+2021/07/11 13:56:12 Starting NATS Microservices OPD Sample - Registration Service version 0.1.0
+2021/07/11 13:56:12 Listening for HTTP requests on 0.0.0.0:9090
 
 
-### Rides Manager
-`go run code/rides-manager/cmd/manager/main.go`
-Starting NATS Rider Rides Manager version 0.1.0
+### Starting the Inspection Service
+`cd inspection-service`
+`go run cmd/main.go -dbName opd_data -dbUser root -dbPassword Root@1985`
+2021/07/11 13:56:18 Starting NATS Microservices OPD Sample - Inspection Service version 0.1.0
+2021/07/11 13:56:18 Listening for HTTP requests on 0.0.0.0:9091
 
 
-### Driver Agent
+### Starting the Treatment Service
+`cd treatment-service`
+`go run cmd/main.go -dbName opd_data -dbUser root -dbPassword Root@1985`
+2021/07/11 13:56:26 Starting NATS Microservices OPD Sample - Treatment Service version 0.1.0
+2021/07/11 13:56:26 Listening for HTTP requests on 0.0.0.0:9092
 
-`go run code/driver-agent/cmd/agent/main.go -type mini`
-Starting NATS Rider Driver Agent version 0.1.0
+
+### Starting the Release Service
+`cd release-service`
+`go run cmd/main.go -dbName opd_data -dbUser root -dbPassword Root@1985`
+2021/07/11 13:54:25 Starting NATS Microservices OPD Sample - Release Service version 0.1.0
+2021/07/11 13:54:25 Listening for HTTP requests on 0.0.0.0:9093
+
+### Register a Patient
+- Request
+`curl "http://localhost:9090/opd/patient/register" -X POST -d '{"full_name":"fernando","address":"44, liyanagemulla, seeduwa","id":100, "sex":"male", "phone":222222222}'`
+- Response
+{"id":100,"token":1}
+
+### View the Patient
+- Request
+`curl "http://localhost:9090/opd/patient/view/100"`
+- Response
+{"full_name":"fernando","address":"44, liyanagemulla, seeduwa","id":100,"sex":"male","phone":222222222}
+
+### Update a Patient
+- Request
+`curl "http://localhost:9090/opd/patient/update" -X PUT -d '{"full_name":"fernando","address":"667/280/6, liyanagemulla, seeduwa","id":100, "sex":"male", "phone":222222222}'`
+- Response
+"Record for Patient updated sucessfully"
+
+### Generate a Token
+- Request
+`curl "http://localhost:9090/opd/patient/token/100"`
+- Response
+{"id":100,"token":1}
 
 
-### Request a Ride
-
-`curl "http://127.0.0.1:9090/rides" -X POST -d '{"type": "mini"}'`
- {"driver_id":"mKFJOZzmawAzaxEKkjKRAP"}
 
 ### Port Numbers for microservices
 
