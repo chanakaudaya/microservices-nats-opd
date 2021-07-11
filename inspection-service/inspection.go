@@ -69,6 +69,37 @@ func (s *Server) ListenRegisterEvents() error {
 
 }
 
+// HandlePending processes requests to view pending inspections.
+func (s *Server) HandlePending(w http.ResponseWriter, r *http.Request) {
+	// Retrieve pending inspections from the database
+	db := dbConn()
+
+	selDB, err := db.Query("SELECT * FROM patient_registrations")
+    if err != nil {
+        panic(err.Error())
+    }
+
+	type allRegistrations []shared.RegistrationEvent
+	var registrations = allRegistrations{}
+
+    for selDB.Next() {
+		var newRegistration shared.RegistrationEvent
+        var id int
+        var token uint64
+        err = selDB.Scan(&id, &token)
+        if err != nil {
+            panic(err.Error())
+        }
+        newRegistration.ID = id
+        newRegistration.Token = token
+		registrations = append(registrations, newRegistration)
+    }
+
+	fmt.Println(registrations)
+	json.NewEncoder(w).Encode(registrations)
+    defer db.Close()
+}
+
 
 // HandleRegister processes patient registration requests.
 func (s *Server) HandleRecord(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +126,13 @@ func (s *Server) HandleRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	insForm.Exec(inspection.ID, inspection.Time, inspection.Observations, inspection.Medication, inspection.Tests, inspection.Notes)
 	//log.Println("INSERT: Name: " + name + " | City: " + city)
+
+	// Remove the entry from pending inspections table if it exists
+	removeData, err := db.Prepare("DELETE FROM patient_registrations WHERE id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	removeData.Exec(inspection.ID)
     
     defer db.Close()
 
@@ -183,6 +221,10 @@ func (s *Server) ListenAndServe(addr string) error {
 	// Handle history view requests
 	// GET /opd/inspection/history/{id}
 	router.HandleFunc("/history/{id}", s.HandleHistory).Methods("GET")
+
+	// Handle pending inspections view requests
+	// GET /opd/inspection/pending
+	router.HandleFunc("/pending", s.HandlePending).Methods("GET")
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
