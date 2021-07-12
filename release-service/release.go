@@ -53,11 +53,11 @@ func (s *Server) ListenReleaseEvents() error {
 			// Insert data to the database
 		db := s.DB()
 
-		insForm, err := db.Prepare("INSERT INTO release_reports(id, next_state, post_medication, notes) VALUES(?,?,?,?)")
+		insForm, err := db.Prepare("INSERT INTO release_reports(id, time, next_state, post_medication, notes) VALUES(?,?,?,?,?)")
 		if err != nil {
 			panic(err.Error())
 		}
-		insForm.Exec(req.ID, req.NextState, req.PostMedication, req.Notes)
+		insForm.Exec(req.ID, req.Time, req.NextState, req.PostMedication, req.Notes)
 		//log.Println("INSERT: Name: " + name + " | City: " + city)
 		
 		//defer db.Close()
@@ -84,12 +84,13 @@ func (s *Server) HandlePendingView(w http.ResponseWriter, r *http.Request) {
     for selDB.Next() {
 		var newRelease shared.ReleaseEvent
         var id int
-        var next_state, post_medication, notes string
-        err = selDB.Scan(&id, &next_state, &post_medication, &notes)
+        var time, next_state, post_medication, notes string
+        err = selDB.Scan(&id, &time, &next_state, &post_medication, &notes)
         if err != nil {
             panic(err.Error())
         }
         newRelease.ID = id
+		newRelease.Time = time
         newRelease.NextState = next_state
 		newRelease.PostMedication = post_medication
 		newRelease.Notes = notes

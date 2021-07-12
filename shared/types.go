@@ -142,6 +142,9 @@ type ReleaseEvent struct {
 	// National Identification Number of the patient.
 	ID int `json:"id"`
 
+	// Time of the release event
+	Time string `json:"time"`
+
 	// Medication schedule 
 	NextState string `json:"next_state,omitempty"`
 

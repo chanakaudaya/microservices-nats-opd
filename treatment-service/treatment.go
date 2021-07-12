@@ -125,7 +125,7 @@ func (s *Server) HandleRelease(w http.ResponseWriter, r *http.Request) {
 	nc := s.NATS()
 	
 	release.RequestID = nuid.Next()
-	release_event := shared.ReleaseEvent{release.ID, release.NextState, release.PostMedication, release.Notes, release.RequestID}
+	release_event := shared.ReleaseEvent{release.ID, release.Time, release.NextState, release.PostMedication, release.Notes, release.RequestID}
 	rel_event, err := json.Marshal(release_event)
 
 	if err != nil {
@@ -342,11 +342,11 @@ func (s *Server) ListenAndServe(addr string) error {
 	
 	// Handle medication record requests
 	// POST /opd/treatment/medication/{id}
-	router.HandleFunc("/medication/{id}", s.HandleMedicationRecord).Methods("POST")
+	router.HandleFunc("/medication", s.HandleMedicationRecord).Methods("POST")
 
 	// Handle test result update requests
 	// GET /opd/treatment/tests/{id}
-	router.HandleFunc("/tests/{id}", s.HandleTestRecord).Methods("POST")
+	router.HandleFunc("/tests", s.HandleTestRecord).Methods("POST")
 
 	// Handle patient release initialization requests
 	// GET /opd/treatment/release

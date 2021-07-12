@@ -48,6 +48,7 @@ CREATE TABLE `test_reports` (
 
 CREATE TABLE `release_reports` (
 `id` int(15) unsigned NOT NULL,
+`time` varchar(50),
 `next_state` varchar(50),
 `post_medication` varchar(255),
 `notes` varchar(255)
