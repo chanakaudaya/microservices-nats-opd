@@ -1,3 +1,4 @@
+-- Table owned by registration service
 CREATE TABLE `patient_details` (
 `id` int(15) unsigned NOT NULL,
 `full_name` varchar(100) NOT NULL,
@@ -8,19 +9,14 @@ CREATE TABLE `patient_details` (
 PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
+-- Table owned by inspection service
 CREATE TABLE `patient_registrations` (
 `id` int(15) unsigned NOT NULL,
 `token` int(10) unsigned NOT NULL,
 PRIMARY KEY (`token`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
-CREATE TABLE `inspection_reports` (
-`id` int(15) unsigned NOT NULL,
-`medication` varchar(255),
-`tests` varchar(255),
-`notes` varchar(255)
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
-
+-- Table owned by inspection service
 CREATE TABLE `inspection_details` (
 `id` int(15) unsigned NOT NULL,
 `time` varchar(50) NOT NULL,
@@ -30,6 +26,15 @@ CREATE TABLE `inspection_details` (
 `notes` varchar(255)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
+-- Table owned by treatment service
+CREATE TABLE `inspection_reports` (
+`id` int(15) unsigned NOT NULL,
+`medication` varchar(255),
+`tests` varchar(255),
+`notes` varchar(255)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+-- Table owned by treatment service
 CREATE TABLE `medication_reports` (
 `id` int(15) unsigned NOT NULL,
 `time` varchar(50),
@@ -37,6 +42,7 @@ CREATE TABLE `medication_reports` (
 `notes` varchar(255)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
+-- Table owned by treatment service
 CREATE TABLE `test_reports` (
 `id` int(15) unsigned NOT NULL,
 `time` varchar(50),
@@ -46,6 +52,7 @@ CREATE TABLE `test_reports` (
 `notes` varchar(255)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
+-- Table owned by release service
 CREATE TABLE `release_reports` (
 `id` int(15) unsigned NOT NULL,
 `time` varchar(50),
@@ -54,6 +61,7 @@ CREATE TABLE `release_reports` (
 `notes` varchar(255)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 
+-- Table owned by release service
 CREATE TABLE `discharge_details` (
 `id` int(15) unsigned NOT NULL,
 `time` varchar(50),

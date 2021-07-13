@@ -65,8 +65,6 @@ func (s *Server) HandleToken(w http.ResponseWriter, r *http.Request) {
 	// Publishing the message to NATS Server
 	nc.Publish("patient.register", reg_event)
 	json.NewEncoder(w).Encode(registration_event)
-
-
 }
 
 
